@@ -87,7 +87,7 @@ def describe_service(role=None, service_id=None, node=None):
 
     search = "I@cluster:ceph"
 
-    supported_roles = ['mon', 'mgr', 'mds', 'rgw']
+    supported_roles = ['mon', 'mgr', 'mds', 'rgw', 'ganesha', 'igw']
 
     if role:
         search += " and I@roles:{}".format(role)
@@ -112,6 +112,8 @@ def describe_service(role=None, service_id=None, node=None):
 
     minion_roles = local.cmd(search, 'pillar.get', ['roles'], tgt_type="compound")
 
+    nfs_pool = None
+
     for minion, roles in minion_roles.items():
         minion_result = {}
         for minion_role in roles:
@@ -125,12 +127,26 @@ def describe_service(role=None, service_id=None, node=None):
                 # skips IDs we don't care about if one was passed in
                 continue
             # pylint: disable=fixme
-            # TODO: consider making this be a list if it's possible for DeepSea
+            # TODO: consider wrapping this in a list if it's possible for DeepSea
             # to deploy multiple services of the same type but with different IDs
             # on the same node.  Of course, DeepSea will deploy mutiple OSDs on
-            # the same node, but describe_service doesn't support quering OSDs,
+            # the same node, but describe_service doesn't support querying OSDs,
             # so that example doesn't count ;-)
-            minion_result[minion_role] = daemon_ids[minion]['host']
+            minion_result[minion_role] = {
+                'service_instance': daemon_ids[minion]['host']
+            }
+            if minion_role == 'ganesha':
+                if not nfs_pool:
+                    __opts__ = salt.config.client_config('/etc/salt/master')
+                    __grains__ = salt.loader.grains(__opts__)
+                    __opts__['grains'] = __grains__
+                    __utils__ = salt.loader.utils(__opts__)
+                    __salt__ = salt.loader.minion_mods(__opts__, utils=__utils__)
+                    nfs_pool = __salt__['master.find_pool'](['cephfs', 'rgw'])
+                minion_result[minion_role]['rados_config_location'] = 'rados://{}/ganesha/conf-{}'.format(nfs_pool, daemon_ids[minion]['host'])
+            if minion_role == 'igw':
+                igw_address = local.cmd(minion, 'public.address', [])[minion]
+                minion_result[minion_role]['service_url'] = 'http://admin:admin@{}:5000'.format(igw_address)
         if minion_result:
             result[minion] = minion_result
 
