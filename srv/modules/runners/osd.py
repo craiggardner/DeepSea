@@ -378,7 +378,7 @@ def _master_minion():
     return __salt_master__["master.minion"]()
 
 
-def ok_to_stop_osds(osd_list):
+def ok_to_stop_osds(osd_list, human=True):
     """ Ask ceph is all given osds are ok-to-stop """
     cmd = "ceph osd ok-to-stop {}".format(osd_list)
     log.info("Running command {}".format(cmd))
@@ -393,13 +393,16 @@ def ok_to_stop_osds(osd_list):
     if 'are ok to stop without reducing availability' in message:
         return True
     else:
-        print(
-            "You are about to remove OSD(s) that would result in degraded PGs. Stopping"
-        )
-        raise NotOkToStop(message)
+        if human:
+            print(
+                "You are about to remove OSD(s) that would result in degraded PGs. Stopping"
+            )
+            raise NotOkToStop(message)
+        else:
+            return False
 
 
-def pre_check(osd_list, force):
+def pre_check(osd_list, force, human):
     """ Pre check method
     Skip if force flag is set
     """
@@ -407,7 +410,7 @@ def pre_check(osd_list, force):
         print("The 'force' flag is set. ok-to-stop checks are disabled."
               " Please use with caution.")
     else:
-        ok_to_stop_osds(osd_list)
+        ok_to_stop_osds(osd_list, human=human)
 
 
 def remove(*args, **kwargs):
@@ -415,7 +418,7 @@ def remove(*args, **kwargs):
     results = dict()
     kwargs.update({'operation': 'remove'})
     osd_list = " ".join([str(x) for x in list(args)])
-    pre_check(osd_list, kwargs.get('force', False))
+    pre_check(osd_list, kwargs.get('force', False), kwargs.get('human', False))
     for osd_id in args:
         _rc = OSDUtil(osd_id, **kwargs).remove()
         results.update({osd_id: _rc})
@@ -427,7 +430,7 @@ def replace(*args, **kwargs):
     results = dict()
     kwargs.update({'operation': 'replace'})
     osd_list = " ".join([str(x) for x in list(args)])
-    pre_check(osd_list, kwargs.get('force', False))
+    pre_check(osd_list, kwargs.get('force', False), kwargs.get('human', False))
     for osd_id in args:
         _rc = OSDUtil(osd_id, **kwargs).replace()
         results.update({osd_id: _rc})

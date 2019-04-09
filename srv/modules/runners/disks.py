@@ -111,6 +111,7 @@ class DriveGroups(object):
     def __init__(self, **kwargs: dict) -> None:
         self.local_client = salt.client.LocalClient()
         self.dry_run: bool = kwargs.get('dry_run', False)
+        self.target: str = kwargs.get('target', None)
         self.drive_groups_path: str = '/srv/salt/ceph/configuration/files/drive_groups.yml'
         self.drive_groups: dict = self._get_drive_groups()
 
@@ -140,9 +141,13 @@ class DriveGroups(object):
         for dg_name, dg_values in self.drive_groups.items():
             print("Found DriveGroup <{}>".format(dg_name))
             dgo = DriveGroup(dg_name, dg_values)
+            if self.target:
+                target = self.target
+            else:
+                target = dgo.target()
             ret.append(
                 self.call(
-                    dgo.target(),
+                    target,
                     dgo.filter_args(),
                     command,
                     module=module,
